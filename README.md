@@ -17,7 +17,7 @@ Byte   | Name          | Comment
 4-n    | Segment Data  | Data for one or more segments.
 
 
-### Format of Segment Data in a Combined Image File
+### Format of Segment Data in a Sparse Combined Image File
 
 Byte   | Name          | Comment
 -------|---------------|-------------------------------
