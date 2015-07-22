@@ -1567,3 +1567,4 @@ extractAddress(const char *& file, uint32_t& addr)
 	file++;
 	return(true);
 }
+
