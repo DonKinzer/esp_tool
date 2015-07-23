@@ -1,4 +1,4 @@
-// $Id: esp.cpp 67 2015-07-22 21:23:28Z Don $
+// $Id: esp.cpp 68 2015-07-23 15:52:09Z Don $
 
 /*
  * Copyright 2015 Don Kinzer
@@ -1270,8 +1270,9 @@ stdImageInfo(VFile& vf, uint32_t ofst, uint32_t size, const char *prefix, FILE *
 
 	// read the padding and the checksum byte
 	uint32_t pos = vf.Position() - ofst;
-	uint8_t lastByte;
-	while ((pos++ & 0x0f) != 0)
+	uint32_t cnt = 16 - (pos & 0x0f);
+	uint8_t lastByte = cksum;
+	while (cnt--)
 	{
 		if (vf.Read(&lastByte, 1, 1) != 1)
 		{
@@ -1282,6 +1283,7 @@ stdImageInfo(VFile& vf, uint32_t ofst, uint32_t size, const char *prefix, FILE *
 	}
 	fprintf(fpOut, "%sThe checksum is %scorrect: 0x%02x\n", prefix, (cksum == 0) ? "" : "in", lastByte);
 
+	pos = vf.Position() - ofst;
 	if ((pos &= 0xfffffff0) < size)
 	{
 		fprintf(fpOut, "\n%sAdditional Flash data:\n", prefix);
