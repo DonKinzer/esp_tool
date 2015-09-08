@@ -20,7 +20,8 @@ for combining multiple images.
 
 The C++ code for esp_tool has been compiled for Windows using both VC6 and VS12,
 an nmake makefile is provided.  It has also been compiled and briefly tested on
-Debian.  The code contains conditionals for Mac OS X but it has not been built
+Debian.  The Makefile also works for building a Windows application using MinGW.
+The code contains conditionals for Mac OS X but it has not been built
 and tested on that platform.
 
 The following tables give the format of a sparse combined image file.  The file

@@ -1,4 +1,4 @@
-// $Id: elf.h 67 2015-07-22 21:23:28Z Don $
+// $Id: elf.h 76 2015-08-24 23:08:40Z Don $
 
 /*
  * Based on ideas in esptool_elf.h, esptool_elf_enums.h and esptool_elf_object.h
@@ -80,9 +80,9 @@ typedef struct {
 } Elf32_Shdr;
 
 /*
-** struct holding  the information of a given section according to
-** what is found in the ELF file
-*/
+ * struct holding the information of a given section according to
+ * what is found in the ELF file
+ */
 typedef struct {
 	const char		*name;
 	Elf32_Word		offset;
@@ -93,6 +93,10 @@ typedef struct {
 
 #define VFileOpenVirt			"v"
 
+//
+// A class representing a file which may be physical (i.e. existing on a
+// storage medium) or virtual (i.e. existing on memory only).
+//
 class VFile
 {
 public:
@@ -130,6 +134,8 @@ public:
 	const char *Name() const { return(m_name ? m_name : ""); }
 
 private:
+	VFile(const VFile&);
+	VFile& operator=(const VFile&);
 	void init();
 	void deinit();
 
@@ -147,11 +153,14 @@ private:
 	char *m_name;			// the associated name
 };
 
+//
+// A class representing information in an ELF file.
+//
 class ELF
 {
 public:
-	ELF();
-	~ELF();
+	ELF() { init(); }
+	~ELF() { deinit(); }
 
 	bool IsOpen() const { return(m_fp != NULL); }
 	int Open(const char *file);
@@ -169,6 +178,8 @@ public:
 	int SectionInfo(FILE *fp = stdout);
 
 private:
+	ELF(const ELF&);
+	ELF& operator=(const ELF&);
 	void init();
 	void deinit();
 	void getStrings();

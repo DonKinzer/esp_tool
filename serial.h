@@ -1,4 +1,4 @@
-// $Id: serial.h 49 2015-07-18 21:39:29Z Don $
+// $Id: serial.h 76 2015-08-24 23:08:40Z Don $
 
 /*
  * Copyright 2015 Don Kinzer
@@ -105,6 +105,8 @@ public:
 protected:
 
 private:
+	SerialQueue(const SerialQueue&);
+	SerialQueue& operator=(const SerialQueue&);
 	SerialHandle_t m_handle;		// the associated serial port
 	unsigned m_maxSize;				// the maximum data space to use (0 for unlimited)
 	unsigned m_curSize;				// current number of bytes of space in the queue
@@ -143,6 +145,8 @@ public:
 protected:
 
 private:
+	SerialChannel(const SerialChannel&);
+	SerialChannel& operator=(const SerialChannel&);
 	SerialHandle_t m_handle;			// the associated serial port
 	SerialQueue m_queue;				// the queue
 };

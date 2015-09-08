@@ -1,4 +1,4 @@
-// $Id: elf.cpp 67 2015-07-22 21:23:28Z Don $
+// $Id: elf.cpp 71 2015-07-24 01:58:07Z Don $
 
 /*
  * Based on ideas in esptool_elf.c and esptool_elf_object.c
@@ -24,18 +24,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-
-ELF::
-ELF()
-{
-	init();
-}
-
-ELF::
-~ELF()
-{
-	deinit();
-}
 
 //
 // Initialize the class members.
@@ -101,8 +89,9 @@ Open(const char *file)
 }
 
 //
-// Write a section given by its ordinal number (0-based) to a file.  If the 'sizeMult'
-// parameter is non-zero, the file is padded with zeroes to be a multiple of that value.
+// Write a section given by its ordinal number (0-based) to a file.  If
+// the 'paddedSize' parameter is non-zero, the file is padded with zeroes
+// to be that size.
 //
 int ELF::
 WriteSection(int sectIdx, VFile& vf, uint8_t& cksum, uint32_t paddedSize) const
@@ -138,6 +127,9 @@ WriteSection(int sectIdx, VFile& vf, uint8_t& cksum, uint32_t paddedSize) const
 	return(sectSize);
 }
 
+//
+// Output information about the sections represented in an ELF file.
+//
 int ELF::
 SectionInfo(FILE *fp)
 {
@@ -177,10 +169,10 @@ GetSectionNum(const char *sectName) const
 // Given a 0-based section index, return the section size.
 //
 Elf32_Word ELF::
-GetSectionSize(Elf32_Half secIdx) const
+GetSectionSize(Elf32_Half sectIdx) const
 {
-	if (secIdx < m_header.e_shnum)
-		return(m_sections[secIdx].size);
+	if (sectIdx < m_header.e_shnum)
+		return(m_sections[sectIdx].size);
 	return(0);
 }
 
@@ -188,10 +180,10 @@ GetSectionSize(Elf32_Half secIdx) const
 // Given a 0-based section index, return the section load address.
 //
 Elf32_Word ELF::
-GetSectionAddress(Elf32_Half secIdx) const
+GetSectionAddress(Elf32_Half sectIdx) const
 {
-	if (secIdx < m_header.e_shnum)
-		return(m_sections[secIdx].address);
+	if (sectIdx < m_header.e_shnum)
+		return(m_sections[sectIdx].address);
 	return(0);
 }
 

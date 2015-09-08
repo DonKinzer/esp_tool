@@ -1,4 +1,4 @@
-// $Id: esp_tool.cpp 67 2015-07-22 21:23:28Z Don $
+// $Id: esp_tool.cpp 78 2015-09-08 17:54:33Z Don $
 
 /*
  * Copyright 2015 Don Kinzer
@@ -189,7 +189,12 @@ static const unsigned verVariant = 0;
 static char commPortStr[20];
 #endif
 
-// long form options (preceeded by '--'), and their corresponding values
+//
+// Long form options (preceeded by '--'), and their corresponding values.
+// N.B.: this table is scanned sequentially for an entry being a substring
+//       of an option.  Consequently, an entry that is a prefix of another
+//       entry must follow the longer entry.
+//
 static OptWord_t optWords[] =
 {
 	{ "address=",		OptionSetAddress },
@@ -198,6 +203,7 @@ static OptWord_t optWords[] =
 	{ "dump-mem",		OptionDumpMem },
 	{ "elf-file=",		OptionSetElf },
 	{ "elf-info",		OptionElfSections },
+	{ "erase-flash",	OptionEraseFlash },
 	{ "erase",			OptionEraseFlash },
 	{ "exit=",			OptionMonitorExit },
 	{ "extract",		OptionAutoExtract },
@@ -272,7 +278,12 @@ main(int argc, char **argv)
 
 	parms.vfCombine.Close();
 	if (esp.GetFlags() & ESP_AUTO_RUN)
-		esp.Run(true);
+	{
+		if (parms.resetMode == ResetNone)
+			esp.Run(true);
+		else
+			esp.ResetDevice(parms.resetMode, true);
+	}
 
 	if (parms.termMode)
 	{
@@ -492,41 +503,41 @@ displayHelp(bool doExit)
 		sprintf(verStr + len, ".%u", verVariant);
 
 	fprintf(stdout, "Invocation:            (V%s)\n", verStr);
-	fprintf(stdout, " esp_tool [[<options>] [<operation>] [<file>]]...\n");
-	fprintf(stdout, "  where <options> are:\n");
-	fprintf(stdout, "  -h           --help              display this information\n");
-	fprintf(stdout, "  -p<port>     --port=<port>       specify the COM port, e.g. COM1 or 1\n");
-	fprintf(stdout, "  -b<speed>    --baud=<speed>      specify the baud rate\n");
-	fprintf(stdout, "  -a<addr>     --address=<addr>    specify the address for a later operation\n");
-	fprintf(stdout, "  -s<size>     --size=<size>       specify the size for a later operation\n");
-	fprintf(stdout, "  -e<elf>      --elf-file=<elf>    specify an ELF file to process\n");
-	fprintf(stdout, "  -fs<size>    --flash-size=<size> Flash size (256K, 512K, 1M, 2M, 4M, 8M)\n");
-	fprintf(stdout, "  -ff<freq>    --flash-freq=<freq> Flash frequency (20M, 26M, 40M, 80M)\n");
-	fprintf(stdout, "  -fm<mode>    --flash-mode=<mode> Flash mode (QIO, DIO, QOUT, DOUT)\n");
-	fprintf(stdout, "  -fp<val>     --flash-parm=<val>  combined Flash parameters\n");
-	fprintf(stdout, "  -l<file>     --log=<file>        log device output in monitor mode\n");
-	fprintf(stdout, "  -m[<speed>]  --monitor[=<speed>] after operations, enter monitor mode\n");
-	fprintf(stdout, "  -r<reset>    --reset=<reset>     specify a reset mode (none, auto, ck, wifio)\n");
-	fprintf(stdout, "  -r0          --no-run            do not run device after operations\n");
-	fprintf(stdout, "  -r1          --run               run device after operations (default)\n");
-	fprintf(stdout, "  -q           --quiet             suppress progress reporting\n");
-	fprintf(stdout, "  -x<code>     --exit=<code>       set the character code for monitor exit\n");
+	fprintf(stdout, "esp_tool [[<options>] [<operation>] [<file>]]...\n");
+	fprintf(stdout, " where <options> are:\n");
+	fprintf(stdout, " -h          --help                 display this information\n");
+	fprintf(stdout, " -p<port>    --port=<port>          specify the COM port, e.g. COM1 or 1\n");
+	fprintf(stdout, " -b<speed>   --baud=<speed>         specify the baud rate\n");
+	fprintf(stdout, " -a<addr>    --address=<addr>       specify the address for a later operation\n");
+	fprintf(stdout, " -s<size>    --size=<size>          specify the size for a later operation\n");
+	fprintf(stdout, " -e<elf>     --elf-file=<elf>       specify an ELF file to process\n");
+	fprintf(stdout, " -fs<size>   --flash-size=<size>    Flash size (256K, 512K, 1M, 2M, 4M, 8M)\n");
+	fprintf(stdout, " -ff<freq>   --flash-freq=<freq>    Flash frequency (20M, 26M, 40M, 80M)\n");
+	fprintf(stdout, " -fm<mode>   --flash-mode=<mode>    Flash mode (QIO, DIO, QOUT, DOUT)\n");
+	fprintf(stdout, " -fp<val>    --flash-parm=<val>     combined Flash parameters\n");
+	fprintf(stdout, " -l<file>    --log=<file>           log device output in monitor mode\n");
+	fprintf(stdout, " -m[<speed>] --monitor[=<speed>]    after operations, enter monitor mode\n");
+	fprintf(stdout, " -r<reset>   --reset=<reset>        set the reset mode (none, auto, ck, wifio)\n");
+	fprintf(stdout, " -r0         --no-run               do not run device after operations\n");
+	fprintf(stdout, " -r1         --run                  run device after operations (default)\n");
+	fprintf(stdout, " -q          --quiet                suppress progress reporting\n");
+	fprintf(stdout, " -x<code>    --exit=<code>          set the character code for monitor exit\n");
 	fprintf(stdout, "\n");
-	fprintf(stdout, "  where <operation> is one of:\n");
-	fprintf(stdout, "  -cp<file>    --padded=<file>     combine images into a padded image file\n");
-	fprintf(stdout, "  -cp+<file>   --padded+=<file>    append images to an existing padded file\n");
-	fprintf(stdout, "  -cs<file>    --sparse=<file>     combine images into a sparse image file\n");
-	fprintf(stdout, "  -cs+<file>   --sparse+=<file>    append images to an existing sparse file\n");
-	fprintf(stdout, "  -od          --dump-mem          write the content of memory to a file\n");
-	fprintf(stdout, "  -oe[<size>]  --erase[=<size>]    erase all or part of Flash memory\n");
-	fprintf(stdout, "  -of          --flash-id          report Flash identification information\n");
-	fprintf(stdout, "  -oi          --image-info        output information about an image\n");
-	fprintf(stdout, "  -om          --read-mac          report the station MAC address\n");
-	fprintf(stdout, "  -or          --read              read Flash memory, write to a file\n");
-	fprintf(stdout, "  -os          --elf-info          output section information from an ELF file\n");
-	fprintf(stdout, "  -os<sect>    --section=<sect>    extract data from sections of an ELF file\n");
-	fprintf(stdout, "  -ow          --write             write files to Flash memory (default)\n");
-	fprintf(stdout, "  -ox[<file>]  --extract[=<file>]  extract ELF file sections to create images\n");
+	fprintf(stdout, " where <operation> is one of:\n");
+	fprintf(stdout, " -cp<file>   --padded=<file>        combine images into a padded image file\n");
+	fprintf(stdout, " -cp+<file>  --padded+=<file>       append images to an existing padded file\n");
+	fprintf(stdout, " -cs<file>   --sparse=<file>        combine images into a sparse image file\n");
+	fprintf(stdout, " -cs+<file>  --sparse+=<file>       append images to an existing sparse file\n");
+	fprintf(stdout, " -od         --dump-mem             write the content of memory to a file\n");
+	fprintf(stdout, " -oe[<size>] --erase-flash[=<size>] erase all or part of Flash memory\n");
+	fprintf(stdout, " -of         --flash-id             report Flash identification information\n");
+	fprintf(stdout, " -oi         --image-info           output information about an image\n");
+	fprintf(stdout, " -om         --read-mac             report the station MAC address\n");
+	fprintf(stdout, " -or         --read-flash           read Flash memory, write to a file\n");
+	fprintf(stdout, " -os         --elf-info             output section information from ELF file\n");
+	fprintf(stdout, " -os<sect>   --section=<sect>       extract data from sections of ELF file\n");
+	fprintf(stdout, " -ow         --write-flash          write files to Flash memory (default)\n");
+	fprintf(stdout, " -ox[<file>] --extract[=<file>]     extract ELF file sections to create images\n");
 
 	if (doExit)
 		exit(0);
@@ -818,12 +829,16 @@ processArg(ESP& esp, Parameter_t& parm, const char *argp)
 		}
 		if (_stricmp(p, "none") == 0)
 			parm.resetMode = ResetNone;
+		else if (_stricmp(p, "auto") == 0)
+			parm.resetMode = ResetAuto;
+		else if (_stricmp(p, "dtronly") == 0)
+			parm.resetMode = ResetDTROnly;
 		else if (_stricmp(p, "ck") == 0)
 			parm.resetMode = ResetCK;
 		else if (_stricmp(p, "wifio") == 0)
 			parm.resetMode = ResetWifio;
-		else if (_stricmp(p, "auto") == 0)
-			parm.resetMode = ResetAuto;
+		else if (_stricmp(p, "nodemcu") == 0)
+			parm.resetMode = ResetNodeMCU;
 		else
 		{
 			fprintf(stderr, "Unrecognized reset mode designator: \"%s\".\n", argp);
@@ -1281,6 +1296,7 @@ processFile(ESP& esp, Parameter_t& parm, const char *file)
 			return;
 	}
 
+	// prepare the target file, if applicable
 	VFile vf;
 	switch (parm.mode)
 	{
@@ -1331,8 +1347,10 @@ processFile(ESP& esp, Parameter_t& parm, const char *file)
 		break;
 	}
 
-	if (parm.mode == ModeWriteFlash)
+	// perform the operation
+	switch (parm.mode)
 	{
+	case ModeWriteFlash:
 		// download the file
 		if (parm.address == ESP_NO_ADDRESS)
 			parm.address = 0;
@@ -1343,9 +1361,9 @@ processFile(ESP& esp, Parameter_t& parm, const char *file)
 		}
 		parm.dlCount++;
 		parm.address = ESP_NO_ADDRESS;
-	}
-	else if (parm.mode == ModeReadFlash)
-	{
+		break;
+
+	case ModeReadFlash:
 		// read Flash, write to file
 		if ((stat = esp.FlashRead(vf, parm.address, parm.size)) != 0)
 		{
@@ -1353,9 +1371,9 @@ processFile(ESP& esp, Parameter_t& parm, const char *file)
 			exit(1);
 		}
 		parm.address = ESP_NO_ADDRESS;
-	}
-	else if (parm.mode == ModeDumpMem)
-	{
+		break;
+
+	case ModeDumpMem:
 		// dump memory to a file
 		if (parm.address == 0)
 		{
@@ -1364,10 +1382,10 @@ processFile(ESP& esp, Parameter_t& parm, const char *file)
 		}
 		esp.DumpMem(vf, parm.address, parm.size);
 		parm.address = ESP_NO_ADDRESS;
-	}
-	else if (parm.mode == ModeElfSection)
-	{
-		// write section(s) of an ELF file to a file
+		break;
+
+	case ModeElfSection:
+		// write one or mroe sections of an ELF file to an image file
 		if (!esp.HaveELF())
 		{
 			fprintf(stderr, "No ELF file was specified.\n");
@@ -1375,14 +1393,16 @@ processFile(ESP& esp, Parameter_t& parm, const char *file)
 		}
 		if ((stat = esp.WriteSections(vf, parm.sectName, parm.flashParmVal)) < 0)
 			exit(1);
-	}
-	else if (parm.mode == ModeImageInfo)
-	{
+		break;
+
+	case ModeImageInfo:
 		// output information about a load image
 		stat = esp.ImageInfo(vf);
-	}
-	else if ((parm.mode == ModeImageCombine) || (parm.mode == ModeImageAppend))
-	{
+		break;
+
+	case ModeImageCombine:
+	case ModeImageAppend:
+		// create or append to a combined image file
 		if (parm.address == ESP_NO_ADDRESS)
 		{
 			size_t curSize = parm.vfCombine.Size();
@@ -1404,6 +1424,10 @@ processFile(ESP& esp, Parameter_t& parm, const char *file)
 		// add a load image to a combined image file
 		stat = esp.AddImage(parm.vfCombine, vf, parm.address, parm.padded);
 		parm.address = ESP_NO_ADDRESS;
+		break;
+
+	default:
+		break;
 	}
 	vf.Close();
 }
@@ -1426,7 +1450,9 @@ openComm(ESP& esp, Parameter_t& parm, bool forDownload)
 		switch (parm.resetMode)
 		{
 		case ResetAuto:
+		case ResetNodeMCU:
 		case ResetCK:		flags = SERIAL_DTR_LOW | SERIAL_RTS_LOW;	break;
+		case ResetDTROnly:
 		case ResetWifio:	flags = SERIAL_DTR_LOW;						break;
 		default:			flags = 0;									break;
 		}
@@ -1567,4 +1593,3 @@ extractAddress(const char *& file, uint32_t& addr)
 	file++;
 	return(true);
 }
-

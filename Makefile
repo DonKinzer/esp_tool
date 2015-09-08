@@ -2,14 +2,18 @@
 
 REMOVE = rm -f
 
-# change the value of this macro to be the path prefix for the .o files
-# or comment it out to have the .o files in the current directory
+# Change the value of this macro to be the path prefix for the .o files
+# or comment it out to have the .o files in the current directory.
 OBJDIR = obj/
 
 GENDEPFLAGS = -Wp,-M,-MP,-MT,$(OBJDIR)$(*F).o,-MF,.dep/$(@F).d
-CFLAGS=-g -Wall -Wno-unused-function -pipe $(GENDEPFLAGS)
-LDFLAGS=-lstdc++ -lrt
-LD=g++
+CC = g++
+CFLAGS = -g -Wall -Wno-unused-function -pipe $(GENDEPFLAGS)
+LDFLAGS = -lstdc++
+ifneq (-$(strip $(MSYSTEM))-,-MINGW32-)
+LDFLAGS += -lrt
+endif
+LD = g++
 TARGET = esp_tool
 
 SRC = \

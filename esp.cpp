@@ -1,4 +1,4 @@
-// $Id: esp.cpp 68 2015-07-23 15:52:09Z Don $
+// $Id: esp.cpp 78 2015-09-08 17:54:33Z Don $
 
 /*
  * Copyright 2015 Don Kinzer
@@ -207,7 +207,7 @@ Connect(ResetMode_t resetMode)
 	}
 	for (i = 0; i < 4; i++)
 	{
-		resetDevice(resetMode);
+		ResetDevice(resetMode);
 
 		for (j = 0; j < 4; j++)
 		{
@@ -455,7 +455,6 @@ flashWrite(VFile& vf, uint32_t ofst, uint32_t size, uint32_t addr, uint16_t flas
 {
 	int stat;
 	const uint32_t blkSize = ESP_FLASH_BLK_SIZE;
-	uint8_t *blkBuf = NULL;
 	uint32_t blkCnt = (size + blkSize - 1) / blkSize;
 
 	// move the file pointer to the start of the image
@@ -475,7 +474,7 @@ flashWrite(VFile& vf, uint32_t ofst, uint32_t size, uint32_t addr, uint16_t flas
 		const uint16_t hdrOfst = 0;
 		const uint16_t dataOfst = 16;
 		const uint16_t blkBufSize = dataOfst + blkSize;
-		blkBuf = new uint8_t[blkBufSize];
+		uint8_t blkBuf[blkBufSize];
 
 		// send the blocks of the file
 		for (uint32_t blkIdx = 0; blkIdx < blkCnt; blkIdx++)
@@ -540,7 +539,6 @@ done:
 		fputs("\n", stdout);
 		fflush(stdout);
 	}
-	delete[] blkBuf;
 	return(stat);
 }
 
@@ -584,22 +582,25 @@ FlashFreq(const char *desc, uint16_t& flashFreq) const
 // Write data from one or more sections from the currently open ELF file
 // to the given virtual file.  If the 'sectName' parameter contains one
 // or more commas, it is taken to be a list of sections names to be written
-// to an ESP formatted load image file.  Otherwise, a raw binary file is
-// written containing only the section content.
+// to an ESP formatted load image file.  Otherwise, but only if the
+// 'forceESP' parameter is false, a raw binary file is written containing
+// only the section content.
 //
 int ESP::
-WriteSections(VFile& vf, const char *sectName, uint16_t flashParm)
+WriteSections(VFile& vf, const char *sectName, uint16_t flashParm, bool forceESP)
 {
 	int stat = -1;
 	uint8_t cksum = ESP_CHECKSUM_MAGIC;
 	int sectNum;
-	if (strchr(sectName, ',') != NULL)
+
+	// see if an ESP formatted load image should be created
+	if (forceESP || (strchr(sectName, ',') != NULL))
 	{
 		char *p;
 
 		// copy the list of section names to a local buffer, limiting the length
 		unsigned len = strlen(sectName);
-		char sectList[200];
+		char sectList[250];
 		if (len >= sizeof(sectList))
 			len = sizeof(sectList) - 1;
 		memcpy(sectList, sectName, len);
@@ -693,7 +694,7 @@ WriteSections(VFile& vf, const char *sectName, uint16_t flashParm)
 //
 // Extract information from an ELF file to create two binary files.  The
 // first image created will contain the .text, .data and .rodata sections
-// and will have the form of an ESP8266 boot image.  The second image
+// and will have the form of an ESP8266 boot image.	 The second image
 // created will be a raw binary image of the .irom0.text section.
 //
 // If the 'vfCombine' parameter is open, write the resulting image
@@ -1293,38 +1294,56 @@ stdImageInfo(VFile& vf, uint32_t ofst, uint32_t size, const char *prefix, FILE *
 }
 
 //
-// Effect a device reset.
+// Effect a device reset.  If the 'forApp' parameter is true, the reset
+// is performed in a manner that results in the application running.
+// Otherwise, the reset is performed in manner that invokes the bootloader.
 //
 void ESP::
-resetDevice(ResetMode_t resetMode)
+ResetDevice(ResetMode_t resetMode, bool forApp)
 {
 	if (IsCommOpen())
 	{
 		switch (resetMode)
 		{
 		case ResetAuto:		// DTR controls RST via a capacitor, RTS pulls down GPIO0
-			// ensure that DTR is high and RTS is low
-			m_serial.Control(SERIAL_DTR_LOW | SERIAL_RTS_HIGH);
-
-			// send a reset pulse
-			m_serial.Control(SERIAL_DTR_HIGH);
-			msDelay(5);
-			m_serial.Control(SERIAL_DTR_LOW);
-
-			// delay a bit and then release GPIO0
-			msDelay(250);
-			m_serial.Control(SERIAL_RTS_LOW);
+			if (forApp)
+			{
+				m_serial.Control(SERIAL_DTR_HIGH);
+				msDelay(5);
+				m_serial.Control(SERIAL_DTR_LOW);
+			}
+			else
+			{
+				// reset into the bootloader by holding RTS low during bootup
+				m_serial.Control(SERIAL_DTR_LOW | SERIAL_RTS_HIGH);
+				msDelay(1);
+				m_serial.Control(SERIAL_DTR_HIGH);
+				msDelay(1);
+				m_serial.Control(SERIAL_DTR_LOW);
+				msDelay(100);
+				m_serial.Control(SERIAL_RTS_LOW);
+			}
 			break;
 
-		case ResetCK:		// DTR pulls down GPIO0, RTS pulls down reset
-			m_serial.Control(SERIAL_DTR_HIGH | SERIAL_RTS_HIGH);	// set RST and GPIO0 to zero
-			msDelay(5);
-			m_serial.Control(SERIAL_RTS_LOW);						// release RST
-			msDelay(75);
-			m_serial.Control(SERIAL_DTR_LOW);						// release GPIO0
+		case ResetCK:		// RTS pulls down reset, DTR pulls down GPIO0
+			if (forApp)
+			{
+				// pulse the RTS line with DTR held inactive
+				m_serial.Control(SERIAL_RTS_HIGH | SERIAL_DTR_LOW);
+				msDelay(5);
+				m_serial.Control(SERIAL_RTS_LOW);
+			}
+			else
+			{
+				m_serial.Control(SERIAL_DTR_HIGH | SERIAL_RTS_HIGH);	// set RST and GPIO0 to zero
+				msDelay(5);
+				m_serial.Control(SERIAL_RTS_LOW);						// release RST
+				msDelay(75);
+				m_serial.Control(SERIAL_DTR_LOW);						// release GPIO0
+			}
 			break;
 
-		case ResetWifio:	// TxD controls GPIO0 via a PNP, and DTR controls RST via a capacitor
+		case ResetWifio:	// DTR controls RST via a capacitor, TxD controls GPIO0 via a diode (or PNP) 
 			// ensure that DTR is high
 			m_serial.Control(SERIAL_DTR_LOW);
 
@@ -1332,10 +1351,44 @@ resetDevice(ResetMode_t resetMode)
 			m_serial.Control(SERIAL_DTR_HIGH);
 			msDelay(5);
 			m_serial.Control(SERIAL_DTR_LOW);
+			if (!forApp)
+			{
+				// send a break and wait for it to complete
+				m_serial.Break(250);
+				msDelay(250);
+			}
+			break;
 
-			// send a break and wait for it to complete
-			m_serial.Break(250);
-			msDelay(250);
+		case ResetNodeMCU:	// DTR and RTS control GPIO0 and RST via NPN transistors
+			if (forApp)
+			{
+				// make DTR high, RTS low thus asserting reset
+				m_serial.Control(SERIAL_DTR_LOW | SERIAL_RTS_HIGH);
+				msDelay(5);
+				m_serial.Control(SERIAL_DTR_LOW | SERIAL_RTS_LOW);
+			}
+			else
+			{
+				// make DTR high, RTS low thus asserting reset
+				m_serial.Control(SERIAL_DTR_LOW | SERIAL_RTS_HIGH);
+				msDelay(5);
+
+				// switch both DTR and RTS to the opposite states, releasing RST and making GPIO0 low
+				m_serial.Control(SERIAL_DTR_HIGH | SERIAL_RTS_LOW);
+				msDelay(75);
+
+				// release GPIO0
+				m_serial.Control(SERIAL_RTS_HIGH);
+			}
+			break;
+
+		case ResetDTROnly:	// DTR controls RST via a capacitor and controls GPIO0 via a diode
+			m_serial.Control(SERIAL_DTR_HIGH);
+			if (forApp)
+				usDelay(10);
+			else
+				msDelay(100);
+			m_serial.Control(SERIAL_DTR_LOW);
 			break;
 
 		default:			// manual reset, nothing to do

@@ -1,4 +1,4 @@
-// $Id: esp.h 60 2015-07-21 20:27:21Z Don $
+// $Id: esp.h 78 2015-09-08 17:54:33Z Don $
 
 /*
  * Copyright 2015 Don Kinzer
@@ -137,10 +137,13 @@ extern uint16_t diagCode;
 typedef enum
 {
 	ResetNone = 0,				// manual reset configuration
-	ResetAuto,					// RTS pulls down GPIO0, DTR controls RST via a capacitor
+	ResetAuto,					// DTR controls RST via a capacitor, RTS pulls down GPIO0
+	ResetDTROnly,				// DTR controls RST via a capacitor and pulls down  GPIO0
 	ResetCK,					// DTR pulls down GPIO0, RTS pulls down reset
-	ResetWifio,					// TxD controls GPIO0 via a PNP, and DTR controls RST via a capacitor
+	ResetWifio,					// DTR controls RST via a capacitor, TxD controls GPIO0 via a PNP 
+	ResetNodeMCU,				// DTR and RTS control RST and GPIO0 via transistors
 } ResetMode_t;
+
 class ESP
 {
 public:
@@ -150,6 +153,7 @@ public:
 	int Sync(uint16_t timeout);
 	int Connect(ResetMode_t resetMode = ResetNone);
 	int Run(bool reboot = false);
+	void ResetDevice(ResetMode_t resetMode, bool forApp = false);
 	int GetFlashID(uint32_t& flashID);
 	int FlashErase();
 	int FlashErase(uint32_t addr, uint32_t length);
@@ -180,7 +184,7 @@ public:
 	void ClearFlags(unsigned mask) { m_flags &= ~mask; }
 
 	int OpenELF(const char *name) { return(m_elf.Open(name)); }
-	int WriteSections(VFile& vf, const char *sectName, uint16_t flashParm = 0);
+	int WriteSections(VFile& vf, const char *sectName, uint16_t flashParm = 0, bool forceESP = false);
 	int AutoExtract(VFile& vfCombine, uint16_t flashParm = 0, bool padded = false, const char *filename = NULL, uint32_t addr = 0);
 	bool HaveELF() const { return(m_elf.IsOpen()); }
 	int SectionInfo(FILE *fp = stdout) { return(m_elf.SectionInfo(fp)); }
@@ -191,6 +195,8 @@ public:
 	uint32_t GetSize() const { return(m_size); }
 
 private:
+	ESP(const ESP&);
+	ESP& operator=(const ESP&);
 	uint16_t checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum = ESP_CHECKSUM_MAGIC) const;
 
 	int ramBegin(uint32_t addr, uint32_t size, uint32_t blkSize, uint32_t blkCnt = 1);
@@ -209,7 +215,6 @@ private:
 	int sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, unsigned dataLen);
 	int doCommand(uint8_t op, const uint8_t *data, unsigned dataLen, uint32_t checkVal = 0, uint32_t *valp = NULL, unsigned msTimeout = DEF_TIMEOUT);
 	int doCommand(uint8_t op, const DataBlock_t *blockList, unsigned dataBlockCnt, uint32_t checkVal = 0, uint32_t *valp = NULL, unsigned msTimeout = DEF_TIMEOUT);
-	void resetDevice(ResetMode_t resetMode);
 
 	int stdImageInfo(VFile& vf, uint32_t ofst, uint32_t size, const char *prefix, FILE *fpOut = stdout);
 
